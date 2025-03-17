@@ -1,6 +1,6 @@
 use regex::Regex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Token {
     // Delimiters
     LParen,
@@ -24,6 +24,7 @@ pub enum Token {
     LogicalOr,
     LogicalAnd,
     LogicalNot,
+    // Binary Operators
     Add,
     Sub,
     Mult,
@@ -33,15 +34,16 @@ pub enum Token {
     // Control Flow
     If,
     Else,
-    Def,
     Rec,
     Fun,
-    Lambda,
+    Return,
     Loop,
+    Break,
     // Primitives
     Int(i64),
     Bool(bool),
     String(String),
+    // Variable
     Var(String),
 }
 
@@ -73,11 +75,11 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
     let re_mod = Regex::new(r"^%(\s*)").unwrap();
     let re_if = Regex::new(r"^if(\s*)").unwrap();
     let re_else = Regex::new(r"^else(\s*)").unwrap();
-    let re_def = Regex::new(r"^def(\s*)").unwrap();
     let re_rec = Regex::new(r"^rec(\s*)").unwrap();
     let re_fun = Regex::new(r"^fun(\s*)").unwrap();
-    let re_lambda = Regex::new(r"^lambda(\s*)").unwrap();
+    let re_return = Regex::new(r"^return(\s*)").unwrap();
     let re_loop = Regex::new(r"^loop(\s*)").unwrap();
+    let re_break = Regex::new(r"^break(\s*)").unwrap();
     // Primitives
     let re_int = Regex::new(r"^-?[0-9]+(\s*)").unwrap();
     let re_bool = Regex::new(r"^(true|false)(\s*)").unwrap();
@@ -97,10 +99,6 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
             let m = re_else.find(s).unwrap();
             s = &s[m.end()..];
             tokens.push(Token::Else);
-        } else if re_def.is_match(s) {
-            let m = re_def.find(s).unwrap();
-            s = &s[m.end()..];
-            tokens.push(Token::Def);
         } else if re_rec.is_match(s) {
             let m = re_rec.find(s).unwrap();
             s = &s[m.end()..];
@@ -109,10 +107,10 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
             let m = re_fun.find(s).unwrap();
             s = &s[m.end()..];
             tokens.push(Token::Fun);
-        } else if re_lambda.is_match(s) {
-            let m = re_lambda.find(s).unwrap();
+        } else if re_return.is_match(s) {
+            let m = re_return.find(s).unwrap();
             s = &s[m.end()..];
-            tokens.push(Token::Lambda);
+            tokens.push(Token::Return);
         } else if re_assign.is_match(s) {
             let m = re_assign.find(s).unwrap();
             s = &s[m.end()..];
@@ -121,6 +119,10 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
             let m = re_loop.find(s).unwrap();
             s = &s[m.end()..];
             tokens.push(Token::Loop);
+        } else if re_break.is_match(s) {
+            let m = re_break.find(s).unwrap();
+            s = &s[m.end()..];
+            tokens.push(Token::Break);
         } else if re_int.is_match(s) {
             let m = re_int.find(s).unwrap();
             s = &s[m.end()..];
