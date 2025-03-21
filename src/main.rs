@@ -36,9 +36,32 @@ fn main() {
     let s = "
         v = 24;
         v = v + 12;
-        if (v > 20) {
-            v = 2;
+        b = 295;
+        fun f(x y) {
+            x = x + 12;
+            y = y + 24;
         }
+        f(v b);
+        if (v > 20) {
+            v = v - 53;
+            b = 24;
+            z(v b);
+        }
+        loop {
+            v = 1 + v;
+            break (v > 20);
+        }
+        if (v > 20) {
+            v = 4 * v;
+            fun z(q v) {
+                q = q - 12;
+                v = v * 2;
+            }
+        } else {
+            v = 3 * v;
+            z(v b);
+        }
+
         ";
 
     let tokens = match tokenize(s.to_string().replace("\n", "").trim_ascii().to_string()) {
@@ -59,5 +82,9 @@ fn main() {
         }
     };
 
-    println!("{:?}", ast);
+    println!("---------------------------------------------");
+
+    for i in 0..ast.len() {
+        println!("{}) {:?}", i + 1, ast[i]);
+    }
 }

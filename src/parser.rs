@@ -4,18 +4,17 @@ use super::lexer::Token;
 pub enum Expr {
     // (ID) = (Expr)
     Assign(ID, Box<Expr>),
-    // if (Cond) { Expr }
-    // Maybe change to Vec<Expr>
-    If(Cond, Box<Expr>),
-    // if (Cond) { Expr } else { Expr }
-    IfElse(Cond, Box<Expr>, Box<Expr>),
-    // fun id(arg0, arg1, ...) { Expr }
-    Fun(ID, Vec<ID>, Box<Expr>),
+    // if (Cond) { Exprs }
+    If(Cond, Vec<Expr>),
+    // if (Cond) { Exprs } else { Exprs }
+    IfElse(Cond, Vec<Expr>, Vec<Expr>),
+    // fun id(arg0(,?) arg1(,?) ...) { Exprs }
+    Fun(ID, Vec<ID>, Vec<Expr>),
     // loop { Exprs +  Break + Exprs? }
-    Loop(Vec<Box<Expr>>, Break),
+    Loop(Vec<Expr>, Break),
     // Expr1 Binop Expr2
     BinOp(String, Box<Expr>, Box<Expr>),
-    // id(arg0, arg1, ...)
+    // id(arg0(,?) arg1(,?) ...)
     FunCall(ID, Vec<ID>),
     // int/string/bool
     Prim(Token),
@@ -55,6 +54,38 @@ pub enum Cond {
 }
 
 pub fn parse(tokens: Vec<Token>) -> Result<Vec<Expr>, &'static str> {
+    let expr = create_expr(tokens);
+    match expr {
+        Ok(t) => {
+            // Small properties of result implementing FromIterator
+            let ast: Result<Vec<Expr>, &str> =
+                t.iter().map(|x| return create_ast(x.clone())).collect();
+            return ast;
+        }
+        Err(e) => return Err(e),
+    }
+}
+
+fn find_curly(tokens: &[Token]) -> Result<usize, &'static str> {
+    let mut q = 0;
+    for i in 0..tokens.len() {
+        match tokens[i] {
+            Token::LCurly => q += 1,
+            Token::RCurly => {
+                if q == 0 {
+                    return Ok(i);
+                } else {
+                    q -= 1
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Err("No matching right curly found")
+}
+
+pub fn create_expr(tokens: Vec<Token>) -> Result<Vec<Vec<Token>>, &'static str> {
     let mut exprs = vec![];
     println!("{} tokens", tokens.len());
 
@@ -72,14 +103,18 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Expr>, &'static str> {
         let tokens_for_expr = match t {
             Token::If => {
                 // Look for a right curly brace and fail if not found
-                let mut end_pos = match temp_toks.iter().position(|x| match x {
-                    Token::RCurly => true,
+                // Write helper func using stack to find ending curly brace
+                let start_curly = match temp_toks.iter().position(|x| match x {
+                    Token::LCurly => true,
                     _ => false,
                 }) {
                     Some(i) => i,
-                    None => {
-                        return Err("Expected {} after if keyword");
-                    }
+                    None => return Err("Expected {} after if statement"),
+                };
+
+                let mut end_pos = match find_curly(&temp_toks[start_curly + 1..]) {
+                    Ok(i) => i + start_curly + 1,
+                    Err(e) => return Err(e),
                 };
 
                 // If we have extra tokens, look for an else
@@ -108,14 +143,17 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Expr>, &'static str> {
             }
             // Same as if but no special cases
             Token::Fun => {
-                let end_pos = match temp_toks.iter().position(|x| match x {
-                    Token::RCurly => true,
+                let start_curly = match temp_toks.iter().position(|x| match x {
+                    Token::LCurly => true,
                     _ => false,
                 }) {
                     Some(i) => i,
-                    None => {
-                        return Err("Expected {} after if keyword");
-                    }
+                    None => return Err("Expected {} after fun statement"),
+                };
+
+                let end_pos = match find_curly(&temp_toks[start_curly + 1..]) {
+                    Ok(i) => i + start_curly + 1,
+                    Err(e) => return Err(e),
                 };
 
                 let v = temp_toks.drain(..=end_pos);
@@ -123,14 +161,17 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Expr>, &'static str> {
             }
             // Same as if but no special cases
             Token::Loop => {
-                let end_pos = match temp_toks.iter().position(|x| match x {
-                    Token::RCurly => true,
+                let start_curly = match temp_toks.iter().position(|x| match x {
+                    Token::LCurly => true,
                     _ => false,
                 }) {
                     Some(i) => i,
-                    None => {
-                        return Err("Expected {} after if keyword");
-                    }
+                    None => return Err("Expected {} after fun statement"),
+                };
+
+                let end_pos = match find_curly(&temp_toks[start_curly + 1..]) {
+                    Ok(i) => i + start_curly + 1,
+                    Err(e) => return Err(e),
                 };
 
                 let v = temp_toks.drain(..=end_pos);
@@ -154,17 +195,10 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Expr>, &'static str> {
                 v.collect::<Vec<Token>>()
             }
         };
-        // println!("Current Tokens {:?}", temp_toks);
         println!("{}) Tokens to parse {:?}", count, tokens_for_expr);
 
         // Create ast for a specific list of tokens
-        let token_ast = create_ast(tokens_for_expr);
-        println!("{:?}", token_ast);
-        match token_ast {
-            Ok(t) => exprs.push(t),
-            Err(e) => return Err(e),
-        }
-
+        exprs.push(tokens_for_expr);
         count += 1;
     }
 
@@ -184,8 +218,6 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
     match lookahead(&tokens_for_expr, 0) {
         // If first token is var,
         // could be assign or a function call or a binop with a variable
-        // function call not implemented yet
-        // binop not implemented yet
         Token::Var(v) => {
             if tokens_for_expr.len() == 1 {
                 return Ok(Expr::VarID(ID { name: v }));
@@ -197,10 +229,62 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                     let a = create_ast(tokens_for_expr[2..].to_vec());
                     match a {
                         Ok(t) => Ok(Expr::Assign(ID { name: v }, Box::new(t))),
-                        Err(e) => return Err(e),
+                        Err(e) => Err(e),
                     }
                 }
-                _ => Err("Unhandled case function call"),
+                Token::Add | Token::Sub | Token::Mult | Token::Div | Token::IntDiv | Token::Mod => {
+                    let b = create_ast(tokens_for_expr[2..].to_vec());
+                    match b {
+                        Ok(t) => match second {
+                            Token::Add => Ok(Expr::BinOp(
+                                "+".to_string(),
+                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(t),
+                            )),
+                            Token::Sub => Ok(Expr::BinOp(
+                                "-".to_string(),
+                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(t),
+                            )),
+                            Token::Mult => Ok(Expr::BinOp(
+                                "*".to_string(),
+                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(t),
+                            )),
+                            Token::Div => Ok(Expr::BinOp(
+                                "/".to_string(),
+                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(t),
+                            )),
+                            Token::IntDiv => Ok(Expr::BinOp(
+                                "//".to_string(),
+                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(t),
+                            )),
+                            Token::Mod => Ok(Expr::BinOp(
+                                "%".to_string(),
+                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(t),
+                            )),
+                            _ => Err("Expected +,-,*,/,//,% after var"),
+                        },
+                        Err(e) => Err(e),
+                    }
+                }
+                Token::LParen => {
+                    // This is a function call instead of a variable call
+                    // Should look like id(arg0(,?) arg1(,?) arg2(,?) ...)
+                    let mut ids = vec![];
+                    for i in 2..tokens_for_expr.len() {
+                        match &tokens_for_expr[i] {
+                            Token::Var(x) => ids.push(ID { name: x.clone() }),
+                            _ => {}
+                        }
+                    }
+                    Ok(Expr::FunCall(ID { name: v }, ids))
+                }
+                Token::Semicolon => Ok(Expr::VarID(ID { name: v })),
+                _ => Err("Unexpected Token after var"),
             }
         }
         // If statement,
@@ -226,20 +310,68 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                 Ok(t) => t,
                 Err(e) => return Err(e),
             };
-            println!("Cond for If Statement: {:?}", cond);
 
-            let sl_start = match tokens_for_expr.iter().position(|x| match x {
+            match tokens_for_expr.iter().position(|x| match x {
                 Token::Else => true,
                 _ => false,
             }) {
-                Some(i) => {
+                Some(_) => {
                     // Found else statement
-                    // unimplemented
-                    return Ok(Expr::IfElse(
-                        cond,
-                        Box::new(Expr::Prim(Token::Int(64))),
-                        Box::new(Expr::Prim(Token::Int(64))),
-                    ));
+                    let fstart_curly = match tokens_for_expr.iter().position(|x| match x {
+                        Token::LCurly => true,
+                        _ => false,
+                    }) {
+                        Some(i) => i,
+                        None => return Err("Expected left curly after if keyword"),
+                    };
+                    let fend_curly = match find_curly(&tokens_for_expr[fstart_curly + 1..]) {
+                        Ok(i) => i + fstart_curly + 1,
+                        Err(e) => return Err(e),
+                    };
+
+                    let else_toks = tokens_for_expr[fend_curly + 1..].to_vec();
+
+                    let sstart_curly = match else_toks.iter().position(|x| match x {
+                        Token::LCurly => true,
+                        _ => false,
+                    }) {
+                        Some(i) => i,
+                        None => return Err("Expected left curly after if keyword"),
+                    };
+                    let send_curly = match find_curly(&else_toks[sstart_curly + 1..]) {
+                        Ok(i) => i + sstart_curly + 1,
+                        Err(e) => return Err(e),
+                    };
+
+                    let if_list =
+                        match create_expr(tokens_for_expr[fstart_curly + 1..fend_curly].to_vec()) {
+                            Ok(t) => t,
+                            Err(e) => return Err(e),
+                        };
+
+                    let else_list =
+                        match create_expr(else_toks[sstart_curly + 1..send_curly].to_vec()) {
+                            Ok(t) => t,
+                            Err(e) => return Err(e),
+                        };
+
+                    let if_exprs: Result<Vec<Expr>, &str> = if_list
+                        .iter()
+                        .map(|x| return create_ast(x.clone()))
+                        .collect();
+
+                    let else_exprs: Result<Vec<Expr>, &str> = else_list
+                        .iter()
+                        .map(|x| return create_ast(x.clone()))
+                        .collect();
+
+                    match if_exprs {
+                        Ok(i) => match else_exprs {
+                            Ok(ex) => Ok(Expr::IfElse(cond, i, ex)),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    }
                 }
                 None => {
                     let cur_start = match tokens_for_expr.iter().position(|x| match x {
@@ -249,47 +381,233 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                         Some(i) => i,
                         None => return Err("Expected left curly after if condition"),
                     };
-                    let cur_end = match tokens_for_expr.iter().position(|x| match x {
-                        Token::RCurly => true,
+                    let cur_end = match find_curly(&tokens_for_expr[cur_start + 1..]) {
+                        Ok(i) => i + cur_start + 1,
+                        Err(e) => return Err(e),
+                    };
+                    // Set of tokens here could be multiple exprs
+                    // First split into Vec of Vec<Token>
+                    // Then create_ast for each one and assign that as value for the expr
+                    let token_list = create_expr(tokens_for_expr[cur_start + 1..cur_end].to_vec());
+
+                    match token_list {
+                        Ok(v) => {
+                            // Fun properties of result
+                            // Since it impls FromIterator, we can switch the order
+                            // So, Vec<Result> becomes Result<Vec> and we can directly know
+                            // if there was an error in the {}
+                            let expr_res_list: Result<Vec<Expr>, &str> =
+                                v.iter().map(|x| return create_ast(x.clone())).collect();
+
+                            match expr_res_list {
+                                Ok(t) => Ok(Expr::If(cond, t)),
+                                Err(e) => Err(e),
+                            }
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+            }
+        }
+
+        // Functions handled
+        Token::Fun => {
+            let id0 = match lookahead(&tokens_for_expr, 1) {
+                Token::Var(x) => ID { name: x },
+                _ => {
+                    return Err("Unnamed function");
+                }
+            };
+            let end_index = match tokens_for_expr.iter().position(|x| match x {
+                Token::RParen => true,
+                _ => false,
+            }) {
+                Some(i) => i,
+                None => return Err("Expected ) after function definition"),
+            };
+
+            let mut ids = vec![];
+            for i in 2..end_index {
+                match &tokens_for_expr[i] {
+                    Token::Var(x) => ids.push(ID { name: x.clone() }),
+                    _ => {}
+                }
+            }
+
+            let start_curly = match tokens_for_expr.iter().position(|x| match x {
+                Token::LCurly => true,
+                _ => false,
+            }) {
+                Some(i) => i,
+                None => return Err("Expected { after function arguments"),
+            };
+            let end_curly = match find_curly(&tokens_for_expr[start_curly + 1..]) {
+                Ok(i) => i + start_curly + 1,
+                Err(e) => return Err(e),
+            };
+
+            let exprs = match create_expr(tokens_for_expr[start_curly + 1..end_curly].to_vec()) {
+                Ok(t) => t,
+                Err(e) => return Err(e),
+            };
+            let expr_res_list: Result<Vec<Expr>, &str> =
+                exprs.iter().map(|x| return create_ast(x.clone())).collect();
+
+            match expr_res_list {
+                Ok(t) => Ok(Expr::Fun(id0, ids, t)),
+                Err(e) => Err(e),
+            }
+        }
+
+        // Loop handled
+        Token::Loop => {
+            let start_curly = match tokens_for_expr.iter().position(|x| match x {
+                Token::LCurly => true,
+                _ => false,
+            }) {
+                Some(i) => i,
+                None => return Err("Expected { after function arguments"),
+            };
+            let end_curly = match find_curly(&tokens_for_expr[start_curly + 1..]) {
+                Ok(i) => i + start_curly + 1,
+                Err(e) => return Err(e),
+            };
+
+            let mut exprs = match create_expr(tokens_for_expr[start_curly + 1..end_curly].to_vec())
+            {
+                Ok(t) => t,
+                Err(e) => return Err(e),
+            };
+            let break_expr = match exprs.pop() {
+                Some(i) => i,
+                None => return Err("No statements in loop {}, put a break at least"),
+            };
+            let cond = match &break_expr[0] {
+                Token::Break => {
+                    let sl_start = match break_expr.iter().position(|x| match x {
+                        Token::LParen => true,
                         _ => false,
                     }) {
                         Some(i) => i,
-                        None => return Err("Expected right curly after if condition"),
+                        None => return Err("Expected left paren after break keyword"),
                     };
-                    let a = create_ast(tokens_for_expr[cur_start + 1..cur_end].to_vec());
-                    return match a {
-                        Ok(t) => Ok(Expr::If(cond, Box::new(t))),
-                        Err(e) => Err(e),
+                    let sl_end = match break_expr.iter().position(|x| match x {
+                        Token::RParen => true,
+                        _ => false,
+                    }) {
+                        Some(i) => i,
+                        None => return Err("Expected right paren after break keyword"),
                     };
+                    parse_cond(&break_expr[sl_start + 1..sl_end])
                 }
+                _ => return Err("No break found in final line"),
             };
+            match cond {
+                Ok(c) => {
+                    let expr_res_list: Result<Vec<Expr>, &str> =
+                        exprs.iter().map(|x| return create_ast(x.clone())).collect();
+
+                    match expr_res_list {
+                        Ok(t) => Ok(Expr::Loop(t, Break { cond: c })),
+                        Err(e) => Err(e),
+                    }
+                }
+                Err(e) => Err(e),
+            }
         }
 
-        // Functions and Loops unhandled
-        // Token::Fun => {
-
-        // },
-        // Token::Loop => {
-
-        // }
-
-        // Binop not handled
-
         // Primitives handled
-        Token::Int(x) => Ok(Expr::Prim(Token::Int(x))),
+        Token::Int(x) => {
+            if tokens_for_expr.len() > 1 {
+                match lookahead(&tokens_for_expr, 1) {
+                    Token::Add
+                    | Token::Sub
+                    | Token::Mult
+                    | Token::Div
+                    | Token::IntDiv
+                    | Token::Mod => {
+                        let v = lookahead(&tokens_for_expr, 1);
+                        match v {
+                            Token::Add => {
+                                let e2 = create_ast(tokens_for_expr[2..].to_vec());
+                                match e2 {
+                                    Ok(e) => Ok(Expr::BinOp(
+                                        "+".to_string(),
+                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(e),
+                                    )),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                            Token::Sub => {
+                                let e2 = create_ast(tokens_for_expr[2..].to_vec());
+                                match e2 {
+                                    Ok(e) => Ok(Expr::BinOp(
+                                        "-".to_string(),
+                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(e),
+                                    )),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                            Token::Mult => {
+                                let e2 = create_ast(tokens_for_expr[2..].to_vec());
+                                match e2 {
+                                    Ok(e) => Ok(Expr::BinOp(
+                                        "*".to_string(),
+                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(e),
+                                    )),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                            Token::Div => {
+                                let e2 = create_ast(tokens_for_expr[2..].to_vec());
+                                match e2 {
+                                    Ok(e) => Ok(Expr::BinOp(
+                                        "/".to_string(),
+                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(e),
+                                    )),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                            Token::IntDiv => {
+                                let e2 = create_ast(tokens_for_expr[2..].to_vec());
+                                match e2 {
+                                    Ok(e) => Ok(Expr::BinOp(
+                                        "//".to_string(),
+                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(e),
+                                    )),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                            Token::Mod => {
+                                let e2 = create_ast(tokens_for_expr[2..].to_vec());
+                                match e2 {
+                                    Ok(e) => Ok(Expr::BinOp(
+                                        "%".to_string(),
+                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(e),
+                                    )),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                            _ => Err("Expected +,-,*,/,//,% after var"),
+                        }
+                    }
+                    _ => Ok(Expr::Prim(Token::Int(x))),
+                }
+            } else {
+                Ok(Expr::Prim(Token::Int(x)))
+            }
+        }
         Token::Bool(x) => Ok(Expr::Prim(Token::Bool(x))),
         Token::String(x) => Ok(Expr::Prim(Token::String(x))),
 
         // On unknown tokens
-        _ => {
-            println!("Unknown list of tokens");
-            Ok(Expr::Assign(
-                ID {
-                    name: "test".to_string(),
-                },
-                Box::new(Expr::Prim(Token::Int(64))),
-            ))
-        }
+        _ => return Err("Unknown list of tokens"),
     }
 }
 
