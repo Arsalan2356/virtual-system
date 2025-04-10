@@ -3,30 +3,26 @@ use super::lexer::Token;
 #[derive(Debug)]
 pub enum Expr {
     // (ID) = (Expr)
-    Assign(ID, Box<Expr>),
+    Assign(String, Box<Expr>),
     // if (Cond) { Exprs }
     If(Cond, Vec<Expr>),
     // if (Cond) { Exprs } else { Exprs }
     IfElse(Cond, Vec<Expr>, Vec<Expr>),
     // fun id(arg0(,?) arg1(,?) ...) { Exprs }
-    Fun(ID, Vec<ID>, Vec<Expr>),
+    Fun(String, Vec<String>, Vec<Expr>),
     // loop { Exprs +  Break + Exprs? }
     Loop(Vec<Expr>, Break),
     // Expr1 Binop Expr2
     BinOp(String, Box<Expr>, Box<Expr>),
     // id(arg0(,?) arg1(,?) ...)
-    FunCall(ID, Vec<ID>),
+    FunCall(String, Vec<String>),
     // int/string/bool
     Prim(Token),
+    // Array of size n x m
+    Array(String, usize, usize, Vec<Token>),
     // variable that matches regex
     // [a-zA-Z][a-zA-Z0-9]*
-    VarID(ID),
-}
-
-#[derive(Debug)]
-// Variable IDs with names
-pub struct ID {
-    name: String,
+    VarID(String),
 }
 
 #[derive(Debug)]
@@ -220,7 +216,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
         // could be assign or a function call or a binop with a variable
         Token::Var(v) => {
             if tokens_for_expr.len() == 1 {
-                return Ok(Expr::VarID(ID { name: v }));
+                return Ok(Expr::VarID(v));
             }
 
             let second = lookahead(&tokens_for_expr, 1);
@@ -228,7 +224,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                 Token::Assign => {
                     let a = create_ast(tokens_for_expr[2..].to_vec());
                     match a {
-                        Ok(t) => Ok(Expr::Assign(ID { name: v }, Box::new(t))),
+                        Ok(t) => Ok(Expr::Assign(v, Box::new(t))),
                         Err(e) => Err(e),
                     }
                 }
@@ -238,32 +234,32 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                         Ok(t) => match second {
                             Token::Add => Ok(Expr::BinOp(
                                 "+".to_string(),
-                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(Expr::VarID(v)),
                                 Box::new(t),
                             )),
                             Token::Sub => Ok(Expr::BinOp(
                                 "-".to_string(),
-                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(Expr::VarID(v)),
                                 Box::new(t),
                             )),
                             Token::Mult => Ok(Expr::BinOp(
                                 "*".to_string(),
-                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(Expr::VarID(v)),
                                 Box::new(t),
                             )),
                             Token::Div => Ok(Expr::BinOp(
                                 "/".to_string(),
-                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(Expr::VarID(v)),
                                 Box::new(t),
                             )),
                             Token::IntDiv => Ok(Expr::BinOp(
                                 "//".to_string(),
-                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(Expr::VarID(v)),
                                 Box::new(t),
                             )),
                             Token::Mod => Ok(Expr::BinOp(
                                 "%".to_string(),
-                                Box::new(Expr::VarID(ID { name: v })),
+                                Box::new(Expr::VarID(v)),
                                 Box::new(t),
                             )),
                             _ => Err("Expected +,-,*,/,//,% after var"),
@@ -277,13 +273,13 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                     let mut ids = vec![];
                     for i in 2..tokens_for_expr.len() {
                         match &tokens_for_expr[i] {
-                            Token::Var(x) => ids.push(ID { name: x.clone() }),
+                            Token::Var(x) => ids.push(x.clone()),
                             _ => {}
                         }
                     }
-                    Ok(Expr::FunCall(ID { name: v }, ids))
+                    Ok(Expr::FunCall(v, ids))
                 }
-                Token::Semicolon => Ok(Expr::VarID(ID { name: v })),
+                Token::Semicolon => Ok(Expr::VarID(v)),
                 _ => Err("Unexpected Token after var"),
             }
         }
@@ -413,7 +409,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
         // Functions handled
         Token::Fun => {
             let id0 = match lookahead(&tokens_for_expr, 1) {
-                Token::Var(x) => ID { name: x },
+                Token::Var(x) => x,
                 _ => {
                     return Err("Unnamed function");
                 }
@@ -429,7 +425,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
             let mut ids = vec![];
             for i in 2..end_index {
                 match &tokens_for_expr[i] {
-                    Token::Var(x) => ids.push(ID { name: x.clone() }),
+                    Token::Var(x) => ids.push(x.clone()),
                     _ => {}
                 }
             }
@@ -517,7 +513,8 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
         }
 
         // Primitives handled
-        Token::Int(x) => {
+        Token::Int(_) | Token::Float(_) => {
+            let t = lookahead(&tokens_for_expr, 0);
             if tokens_for_expr.len() > 1 {
                 match lookahead(&tokens_for_expr, 1) {
                     Token::Add
@@ -533,7 +530,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                                 match e2 {
                                     Ok(e) => Ok(Expr::BinOp(
                                         "+".to_string(),
-                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(Expr::Prim(t)),
                                         Box::new(e),
                                     )),
                                     Err(e) => Err(e),
@@ -544,7 +541,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                                 match e2 {
                                     Ok(e) => Ok(Expr::BinOp(
                                         "-".to_string(),
-                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(Expr::Prim(t)),
                                         Box::new(e),
                                     )),
                                     Err(e) => Err(e),
@@ -555,7 +552,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                                 match e2 {
                                     Ok(e) => Ok(Expr::BinOp(
                                         "*".to_string(),
-                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(Expr::Prim(t)),
                                         Box::new(e),
                                     )),
                                     Err(e) => Err(e),
@@ -566,7 +563,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                                 match e2 {
                                     Ok(e) => Ok(Expr::BinOp(
                                         "/".to_string(),
-                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(Expr::Prim(t)),
                                         Box::new(e),
                                     )),
                                     Err(e) => Err(e),
@@ -577,7 +574,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                                 match e2 {
                                     Ok(e) => Ok(Expr::BinOp(
                                         "//".to_string(),
-                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(Expr::Prim(t)),
                                         Box::new(e),
                                     )),
                                     Err(e) => Err(e),
@@ -588,7 +585,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                                 match e2 {
                                     Ok(e) => Ok(Expr::BinOp(
                                         "%".to_string(),
-                                        Box::new(Expr::Prim(Token::Int(x))),
+                                        Box::new(Expr::Prim(t)),
                                         Box::new(e),
                                     )),
                                     Err(e) => Err(e),
@@ -597,14 +594,78 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                             _ => Err("Expected +,-,*,/,//,% after var"),
                         }
                     }
-                    _ => Ok(Expr::Prim(Token::Int(x))),
+                    _ => Ok(Expr::Prim(t)),
                 }
             } else {
-                Ok(Expr::Prim(Token::Int(x)))
+                Ok(Expr::Prim(t))
             }
         }
         Token::Bool(x) => Ok(Expr::Prim(Token::Bool(x))),
         Token::String(x) => Ok(Expr::Prim(Token::String(x))),
+
+        // Vector
+        Token::LCurly => {
+            let vec_type = match lookahead(&tokens_for_expr, 1) {
+                Token::Int(_) => "int",
+                Token::Float(_) => "float",
+                Token::Bool(_) => "bool",
+                _ => "",
+            }
+            .to_string();
+
+            if vec_type == "" {
+                return Err("Unknown type in vector");
+            }
+
+            let mut vec_cols = 0;
+            let mut toks = vec![];
+
+            let mut c = 1;
+            while c < tokens_for_expr.len() {
+                match lookahead(&tokens_for_expr, c) {
+                    Token::Comma => {
+                        if vec_cols == 0 {
+                            vec_cols = toks.len();
+                        } else {
+                            if toks.len() % vec_cols != 0 {
+                                return Err("Mismatch in number of elements per row");
+                            }
+                        }
+                    }
+                    Token::Float(x) => {
+                        if vec_type == "float" {
+                            toks.push(Token::Float(x));
+                        } else {
+                            return Err("Mismatched type in vector, got float");
+                        }
+                    }
+                    Token::Int(x) => {
+                        if vec_type == "int" {
+                            toks.push(Token::Int(x));
+                        } else {
+                            return Err("Mismatched type in vector, got int");
+                        }
+                    }
+                    Token::Bool(x) => {
+                        if vec_type == "bool" {
+                            toks.push(Token::Bool(x));
+                        } else {
+                            return Err("Mismatched type in vector, got bool");
+                        }
+                    }
+                    Token::RCurly | Token::Semicolon => {}
+                    x => {
+                        println!("Unexpected token in vector {:?}", x);
+                        return Err("Unexpected token in vector");
+                    }
+                }
+                c += 1;
+            }
+
+            let vec_rows = toks.len() / vec_cols;
+
+            return Ok(Expr::Array(vec_type, vec_rows, vec_cols, toks));
+        }
 
         // On unknown tokens
         _ => return Err("Unknown list of tokens"),

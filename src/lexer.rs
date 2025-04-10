@@ -9,6 +9,7 @@ pub enum Token {
     RCurly,
     Semicolon,
     Assign,
+    Comma,
     // Comparison Operators
     Equal,
     NotEqual,
@@ -40,6 +41,7 @@ pub enum Token {
     Loop,
     Break,
     // Primitives
+    Float(f64),
     Int(i64),
     Bool(bool),
     String(String),
@@ -54,6 +56,7 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
     let re_rcurly = Regex::new(r"^\}(\s*)").unwrap();
     let re_semi = Regex::new(r"^;(\s*)").unwrap();
     let re_assign = Regex::new(r"^=(\s*)").unwrap();
+    let re_comma = Regex::new(r"^,(\s*)").unwrap();
     let re_eq = Regex::new(r"^==(\s*)").unwrap();
     let re_neq = Regex::new(r"^!=(\s*)").unwrap();
     let re_greater = Regex::new(r"^>(\s*)").unwrap();
@@ -81,6 +84,7 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
     let re_loop = Regex::new(r"^loop(\s*)").unwrap();
     let re_break = Regex::new(r"^break(\s*)").unwrap();
     // Primitives
+    let re_float = Regex::new(r"^-?[0-9]+\.[0-9]+(\s*)").unwrap();
     let re_int = Regex::new(r"^-?[0-9]+(\s*)").unwrap();
     let re_bool = Regex::new(r"^(true|false)(\s*)").unwrap();
     let re_string = Regex::new("^\"([^\"]*)\"(\\s*)").unwrap();
@@ -115,6 +119,10 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
             let m = re_assign.find(s).unwrap();
             s = &s[m.end()..];
             tokens.push(Token::Assign);
+        } else if re_comma.is_match(s) {
+            let m = re_comma.find(s).unwrap();
+            s = &s[m.end()..];
+            tokens.push(Token::Comma);
         } else if re_loop.is_match(s) {
             let m = re_loop.find(s).unwrap();
             s = &s[m.end()..];
@@ -123,6 +131,11 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
             let m = re_break.find(s).unwrap();
             s = &s[m.end()..];
             tokens.push(Token::Break);
+        } else if re_float.is_match(s) {
+            let m = re_float.find(s).unwrap();
+            s = &s[m.end()..];
+            let num = m.as_str().trim_end().parse().unwrap();
+            tokens.push(Token::Float(num));
         } else if re_int.is_match(s) {
             let m = re_int.find(s).unwrap();
             s = &s[m.end()..];
