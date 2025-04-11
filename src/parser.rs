@@ -10,7 +10,7 @@ pub enum Expr {
     IfElse(Cond, Vec<Expr>, Vec<Expr>),
     // fun id(arg0(,?) arg1(,?) ...) { Exprs }
     Fun(String, Vec<String>, Vec<Expr>),
-    // loop { Exprs +  Break + Exprs? }
+    // loop { Exprs + Break + Exprs? }
     Loop(Vec<Expr>, Break),
     // Expr1 Binop Expr2
     BinOp(String, Box<Expr>, Box<Expr>),

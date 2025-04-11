@@ -1,5 +1,6 @@
 use lexer::tokenize;
 use parser::parse;
+use ssa::ssa;
 
 // Write lexer
 // Write parser
@@ -8,6 +9,7 @@ use parser::parse;
 
 pub mod lexer;
 pub mod parser;
+pub mod ssa;
 
 fn main() {
     let s = "
@@ -78,4 +80,18 @@ fn main() {
     }
 
     // Build IR Compiler
+
+    let ssa_out = match ssa(ast) {
+        Ok(t) => t,
+        Err(e) => {
+            println!("{:?}", e);
+            vec![]
+        }
+    };
+
+    println!("---------------------------------------------");
+
+    for i in 0..ssa_out.len() {
+        print!("{}) {}", i + 1, ssa_out[i]);
+    }
 }
