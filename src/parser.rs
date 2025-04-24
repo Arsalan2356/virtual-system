@@ -1,6 +1,6 @@
 use super::lexer::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     // (ID) = (Expr)
     Assign(String, Box<Expr>),
@@ -16,7 +16,7 @@ pub enum Expr {
     BinOp(String, Box<Expr>, Box<Expr>),
     // id(arg0(,?) arg1(,?) ...)
     FunCall(String, Vec<String>),
-    // int/string/bool
+    // int/float/string/bool
     Prim(Token),
     // Array of size n x m
     Array(String, usize, usize, Vec<Token>),
@@ -25,13 +25,13 @@ pub enum Expr {
     VarID(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 // Break with a condition on when
 pub struct Break {
-    cond: Cond,
+    pub cond: Cond,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 // Cond = Cond BooleanExpr Cond | Eq | Neq | Geq | Leq | Ge | Le
 pub enum Cond {
     Eq(Box<Expr>, Box<Expr>),
@@ -83,11 +83,11 @@ fn find_curly(tokens: &[Token]) -> Result<usize, &'static str> {
 
 pub fn create_expr(tokens: Vec<Token>) -> Result<Vec<Vec<Token>>, &'static str> {
     let mut exprs = vec![];
-    println!("{} tokens", tokens.len());
+    // println!("{} tokens", tokens.len());
 
     let mut temp_toks = tokens.clone();
     // Keep counter to know how many exprs we have
-    let mut count = 1;
+    let mut _count = 1;
 
     while !temp_toks.is_empty() {
         let t = temp_toks[0].clone();
@@ -191,11 +191,11 @@ pub fn create_expr(tokens: Vec<Token>) -> Result<Vec<Vec<Token>>, &'static str> 
                 v.collect::<Vec<Token>>()
             }
         };
-        println!("{}) Tokens to parse {:?}", count, tokens_for_expr);
+        // println!("{}) Tokens to parse {:?}", count, tokens_for_expr);
 
         // Create ast for a specific list of tokens
         exprs.push(tokens_for_expr);
-        count += 1;
+        _count += 1;
     }
 
     if exprs.len() == 0 {
