@@ -1,0 +1,74 @@
+// data
+x = {
+}
+
+// add 1 extra row for bias
+// last row is always bias
+// 10 x 6
+l1weights = {
+
+}
+
+// 6 x 4
+l2weights = {
+}
+
+// 4 x 1
+l3weights = {
+}
+
+
+
+maxiter = 1000;
+loop {
+
+    j = 0;
+    loop {
+        // Forward Propagation
+        sample = x[j];
+        z1 = matmul(sample, l1weights);
+        relu(z1);
+        z1[5] = 1;
+
+        z2 = matmul(z1, l2weights);
+        relu(z2);
+        z2[3] = 1;
+
+        z3 = matmul(z2, l3weights);
+        sigmoid(z3);
+
+
+        // Backpropagation
+        dz3 = z3 - y[i];
+
+        dw3 = outer(z2, dz3);
+        dz2 = matmul(l3weights, dz3);
+        relz2 = z2;
+        reludrv(relz2);
+        dz2 = dz2 * relz2;
+        dz2[3] = 0;
+
+        dw2 = outer(z1, dz2);
+        dz1 = matmul(l2weights, dz2);
+        relz1 = z1;
+        reludrv(relz1);
+        dz1 = dz1 * relz1;
+        dz1[5] = 0;
+
+        dw1 = outer(sample, dz1);
+
+        changeW3 = lr * dw3;
+        changeW2 = lr * dw2;
+        changeW1 = lr * dw1;
+
+
+
+        j = j + 1;
+        break (j == 699);
+    }
+
+
+
+    maxiter = maxiter - 1;
+    break (maxiter == 0);
+}

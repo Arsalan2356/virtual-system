@@ -7,6 +7,8 @@ pub enum Token {
     RParen,
     LCurly,
     RCurly,
+    LSquare,
+    RSquare,
     Semicolon,
     Assign,
     Comma,
@@ -54,6 +56,8 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
     let re_rparen = Regex::new(r"^\)(\s*)").unwrap();
     let re_lcurly = Regex::new(r"^\{(\s*)").unwrap();
     let re_rcurly = Regex::new(r"^\}(\s*)").unwrap();
+    let re_lsquare = Regex::new(r"^\[(\s*)").unwrap();
+    let re_rsquare = Regex::new(r"^\](\s*)").unwrap();
     let re_semi = Regex::new(r"^;(\s*)").unwrap();
     let re_assign = Regex::new(r"^=(\s*)").unwrap();
     let re_comma = Regex::new(r"^,(\s*)").unwrap();
@@ -115,10 +119,6 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
             let m = re_return.find(s).unwrap();
             s = &s[m.end()..];
             tokens.push(Token::Return);
-        } else if re_assign.is_match(s) {
-            let m = re_assign.find(s).unwrap();
-            s = &s[m.end()..];
-            tokens.push(Token::Assign);
         } else if re_comma.is_match(s) {
             let m = re_comma.find(s).unwrap();
             s = &s[m.end()..];
@@ -249,11 +249,24 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
             let m = re_rcurly.find(s).unwrap();
             s = &s[m.end()..];
             tokens.push(Token::RCurly);
+        } else if re_lsquare.is_match(s) {
+            let m = re_lsquare.find(s).unwrap();
+            s = &s[m.end()..];
+            tokens.push(Token::LSquare);
+        } else if re_rsquare.is_match(s) {
+            let m = re_rsquare.find(s).unwrap();
+            s = &s[m.end()..];
+            tokens.push(Token::RSquare);
         } else if re_semi.is_match(s) {
             let m = re_semi.find(s).unwrap();
             s = &s[m.end()..];
             tokens.push(Token::Semicolon);
+        } else if re_assign.is_match(s) {
+            let m = re_assign.find(s).unwrap();
+            s = &s[m.end()..];
+            tokens.push(Token::Assign);
         } else {
+            println!("Current string : {}", s);
             return Err("Unable to tokenize string".to_string());
         }
     }

@@ -20,6 +20,8 @@ pub enum Expr {
     Prim(Token),
     // Array of size n x m
     Array(String, usize, usize, Vec<Token>),
+    // Array Access
+    ArrayAccess(String, Box<Expr>, Box<Expr>),
     // variable that matches regex
     // [a-zA-Z][a-zA-Z0-9]*
     VarID(String),
@@ -198,18 +200,20 @@ pub fn create_expr(tokens: Vec<Token>) -> Result<Vec<Vec<Token>>, &'static str> 
         _count += 1;
     }
 
-    if exprs.len() == 0 {
+    if exprs.len() == 0 && tokens.len() != 0 {
+        println!("Tokens : {:?}", tokens);
         return Err("No Expressions in Tokens");
     }
 
     return Ok(exprs);
 }
 
-pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
-    fn lookahead(l: &Vec<Token>, n: usize) -> Token {
-        return l[n].clone();
-    }
+pub fn lookahead(l: &Vec<Token>, n: usize) -> Token {
+    return l[n].clone();
+}
 
+pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
+    println!("Parsing {:?}", tokens_for_expr);
     // Check first token to see what we have
     match lookahead(&tokens_for_expr, 0) {
         // If first token is var,
@@ -280,6 +284,60 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                     Ok(Expr::FunCall(v, ids))
                 }
                 Token::Semicolon => Ok(Expr::VarID(v)),
+                // Array declaration handle separately
+                Token::LSquare => {
+                    let toks = tokens_for_expr[2..].into_iter().position(|x| match x {
+                        &Token::LCurly => true,
+                        _ => false,
+                    });
+                    match toks {
+                        Some(x) => create_vec(tokens_for_expr),
+                        None => {
+                            // Array access
+                            let v_name = match lookahead(&tokens_for_expr, 0) {
+                                Token::Var(x) => x,
+                                _ => return Err("Expected array name in array access"),
+                            };
+                            let mut indices = vec![];
+                            let mut index = 1;
+                            while index < tokens_for_expr.len() {
+                                match lookahead(&tokens_for_expr, index) {
+                                    Token::LSquare => {
+                                        index += 1;
+                                        match lookahead(&tokens_for_expr, index) {
+                                            Token::Int(x) => {
+                                                if x < 0 {
+                                                    return Err("Expected positive array access");
+                                                } else {
+                                                    indices.push(Expr::Prim(Token::Int(x)));
+                                                }
+                                            }
+                                            Token::Var(x) => {
+                                                indices.push(Expr::VarID(x));
+                                            }
+                                            _ => {
+                                                return Err(
+                                                    "Expected either var or int in array access",
+                                                );
+                                            }
+                                        }
+                                        index += 1;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            if indices.len() == 2 {
+                                Ok(Expr::ArrayAccess(
+                                    v_name,
+                                    Box::new(indices[0].clone()),
+                                    Box::new(indices[1].clone()),
+                                ))
+                            } else {
+                                Err("Expected exactly two indices in array access")
+                            }
+                        }
+                    }
+                }
                 _ => Err("Unexpected Token after var"),
             }
         }
@@ -604,68 +662,6 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
         Token::String(x) => Ok(Expr::Prim(Token::String(x))),
 
         // Vector
-        Token::LCurly => {
-            let vec_type = match lookahead(&tokens_for_expr, 1) {
-                Token::Int(_) => "int",
-                Token::Float(_) => "float",
-                Token::Bool(_) => "bool",
-                _ => "",
-            }
-            .to_string();
-
-            if vec_type == "" {
-                return Err("Unknown type in vector");
-            }
-
-            let mut vec_cols = 0;
-            let mut toks = vec![];
-
-            let mut c = 1;
-            while c < tokens_for_expr.len() {
-                match lookahead(&tokens_for_expr, c) {
-                    Token::Comma => {
-                        if vec_cols == 0 {
-                            vec_cols = toks.len();
-                        } else {
-                            if toks.len() % vec_cols != 0 {
-                                return Err("Mismatch in number of elements per row");
-                            }
-                        }
-                    }
-                    Token::Float(x) => {
-                        if vec_type == "float" {
-                            toks.push(Token::Float(x));
-                        } else {
-                            return Err("Mismatched type in vector, got float");
-                        }
-                    }
-                    Token::Int(x) => {
-                        if vec_type == "int" {
-                            toks.push(Token::Int(x));
-                        } else {
-                            return Err("Mismatched type in vector, got int");
-                        }
-                    }
-                    Token::Bool(x) => {
-                        if vec_type == "bool" {
-                            toks.push(Token::Bool(x));
-                        } else {
-                            return Err("Mismatched type in vector, got bool");
-                        }
-                    }
-                    Token::RCurly | Token::Semicolon => {}
-                    x => {
-                        println!("Unexpected token in vector {:?}", x);
-                        return Err("Unexpected token in vector");
-                    }
-                }
-                c += 1;
-            }
-
-            let vec_rows = toks.len() / vec_cols;
-
-            return Ok(Expr::Array(vec_type, vec_rows, vec_cols, toks));
-        }
 
         // On unknown tokens
         _ => return Err("Unknown list of tokens"),
@@ -673,6 +669,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
 }
 
 pub fn parse_cond(v: &[Token]) -> Result<Cond, &'static str> {
+    println!("PARSING COND ON {:?}", v);
     // Look for boolean operators to split into multiple conds
     let bool_search = v.iter().position(|x| match x {
         Token::Or
@@ -859,4 +856,106 @@ pub fn parse_cond(v: &[Token]) -> Result<Cond, &'static str> {
             }
         }
     }
+}
+
+pub fn create_vec(tokens: Vec<Token>) -> Result<Expr, &'static str> {
+    println!("CREATING VEC : {:?}", tokens);
+    // Special case with an assign
+    let vec_name = match lookahead(&tokens, 0) {
+        Token::Var(x) => x,
+        _ => return Err("Expected variable name before vector assignment"),
+    };
+    println!("VEC NAME : {}", vec_name);
+
+    let mut dims = vec![];
+    let mut index = 1;
+    while dims.len() < 2 {
+        match lookahead(&tokens, index) {
+            Token::LSquare => {
+                index += 1;
+                match lookahead(&tokens, index) {
+                    Token::Int(x) => {
+                        if x < 0 {
+                            return Err("Expected positive int in vector dim");
+                        } else {
+                            dims.push(x as usize);
+                        }
+                    }
+                    _ => return Err("Expected int dim in vector"),
+                }
+                index += 1;
+                match lookahead(&tokens, index) {
+                    Token::RSquare => {}
+                    _ => return Err("Expected ] after vector size definition"),
+                }
+                index += 1;
+            }
+            _ => {}
+        }
+    }
+    // Skip the equals sign
+    match lookahead(&tokens, index) {
+        Token::Assign => index += 1,
+        _ => return Err("Expected assignment after vector size declaration"),
+    }
+    let mut toks = vec![];
+    let vec_type;
+    match lookahead(&tokens, index) {
+        Token::LCurly => {
+            vec_type = match lookahead(&tokens, index + 1) {
+                Token::Int(_) => "int",
+                Token::Float(_) => "float",
+                Token::Bool(_) => "bool",
+                _ => return Err("Unknown type in vector"),
+            }
+            .to_string();
+
+            let vec_cols = dims[1];
+
+            let mut c = index + 1;
+            while c < tokens.len() {
+                match lookahead(&tokens, c) {
+                    Token::Comma => {
+                        if toks.len() % vec_cols != 0 {
+                            return Err("Mismatch in number of elements per row");
+                        }
+                    }
+                    Token::Float(x) => {
+                        if vec_type == "float" {
+                            toks.push(Token::Float(x));
+                        } else {
+                            return Err("Mismatched type in vector, got float");
+                        }
+                    }
+                    Token::Int(x) => {
+                        if vec_type == "int" {
+                            toks.push(Token::Int(x));
+                        } else {
+                            return Err("Mismatched type in vector, got int");
+                        }
+                    }
+                    Token::Bool(x) => {
+                        if vec_type == "bool" {
+                            toks.push(Token::Bool(x));
+                        } else {
+                            return Err("Mismatched type in vector, got bool");
+                        }
+                    }
+                    Token::RCurly | Token::Semicolon => {}
+                    x => {
+                        println!("Unexpected token in vector {:?}", x);
+                        return Err("Unexpected token in vector");
+                    }
+                }
+                c += 1;
+            }
+        }
+
+        _ => return Err("Expected { after vector ="),
+    }
+
+    return Ok(Expr::Assign(
+        vec_name,
+        Box::new(Expr::Array(vec_type, dims[0], dims[1], toks)),
+    ));
 }

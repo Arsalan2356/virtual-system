@@ -68,7 +68,12 @@ pub fn to_ssa(exprs: &mut Vec<Expr>, vars: &mut HashSet<Variable>) -> Vec<SSA> {
                     ssa_exprs.push(i);
                 }
             }
-            Expr::IfElse(cond, true_e, false_e) => {}
+            Expr::IfElse(cond, true_e, false_e) => {
+                let new_exprs = handle_if_else(cond, true_e, false_e, vars);
+                for i in new_exprs {
+                    ssa_exprs.push(i);
+                }
+            }
             Expr::Loop(e, break_val) => {}
             _ => ssa_exprs.push(SSA::S(expr)),
         }
@@ -127,6 +132,75 @@ pub fn handle_if(cond: Cond, e: Vec<Expr>, vars: &mut HashSet<Variable>) -> Vec<
     }
 
     new_exprs.push(SSA::If(cond, if_exprs));
+    for (l, r) in phi {
+        new_exprs.push(SSA::Phi(l, r));
+    }
+
+    return new_exprs;
+}
+
+pub fn handle_if_else(
+    cond: Cond,
+    true_e: Vec<Expr>,
+    false_e: Vec<Expr>,
+    vars: &mut HashSet<Variable>,
+) -> Vec<SSA> {
+    let mut new_exprs = vec![];
+    let mut expr_vars = vec![];
+
+    for i in true_e.clone() {
+        match i {
+            Expr::Assign(s, _) => expr_vars.push(s.clone()),
+            _ => {}
+        }
+    }
+    for i in false_e.clone() {
+        match i {
+            Expr::Assign(s, _) => expr_vars.push(s.clone()),
+            _ => {}
+        }
+    }
+
+    let mut phi: HashMap<String, String> = HashMap::new();
+
+    for s in expr_vars {
+        let mut split_str: Vec<&str> = s.split("_sub_").into_iter().collect();
+        if split_str.len() == 1 {
+            split_str.push("0");
+        }
+        let var = Variable {
+            basename: split_str[0].to_string(),
+            subscript: split_str[1].parse::<u32>().unwrap_or(0),
+        };
+        if vars.contains(&var) {
+            phi.insert(s.clone(), s.clone());
+        }
+    }
+
+    let if_true_exprs = to_ssa(&mut true_e.clone(), vars);
+    let if_false_exprs = to_ssa(&mut false_e.clone(), vars);
+
+    let phi_clone = phi.clone();
+    let phi_keys = phi_clone.keys().collect::<Vec<&String>>();
+
+    for p in phi_keys {
+        let p_base = p.split("_sub_").collect::<Vec<&str>>()[0];
+        let v = vars.clone().into_iter().max_by_key(|x| {
+            if x.basename == p_base {
+                100 + x.subscript
+            } else {
+                0
+            }
+        });
+        match v {
+            Some(k) => {
+                phi.insert(p.clone(), k.to_string());
+            }
+            None => {}
+        }
+    }
+
+    new_exprs.push(SSA::IfElse(cond, if_true_exprs, if_false_exprs));
     for (l, r) in phi {
         new_exprs.push(SSA::Phi(l, r));
     }

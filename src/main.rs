@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fs};
 
 use irstring::stringify;
 use lexer::tokenize;
@@ -72,6 +72,9 @@ fn main() {
         }
         ";
 
+    let s = fs::read_to_string("src/neural_net_copy.txt")
+        .expect("Expected a text file called neural_net");
+
     let tokens = match tokenize(s.to_string().replace("\n", "").trim_ascii().to_string()) {
         Ok(t) => t,
         Err(e) => {
@@ -81,6 +84,7 @@ fn main() {
     };
 
     // println!("{:?}", tokens);
+    println!("{} tokens", tokens.len());
 
     let mut ast = match parse(tokens) {
         Ok(t) => t,
@@ -90,24 +94,24 @@ fn main() {
         }
     };
 
-    // println!("---------------------------------------------");
-
-    // for i in 0..ast.len() {
-    //     println!("{}) {:?}", i + 1, ast[i]);
-    // }
-
-    let mut vars = HashSet::new();
-    let ssa = to_ssa(&mut ast, &mut vars);
-
     println!("---------------------------------------------");
 
-    for i in 0..ssa.len() {
-        println!("{}) {:?}", i + 1, ssa[i]);
+    for i in 0..ast.len() {
+        println!("{}) {:?}", i + 1, ast[i]);
     }
+
+    // let mut vars = HashSet::new();
+    // let ssa = to_ssa(&mut ast, &mut vars);
+
+    // println!("---------------------------------------------");
+
+    // for i in 0..ssa.len() {
+    //     println!("{}) {:?}", i + 1, ssa[i]);
+    // }
 
     // Build IR Compiler
 
-    let ssa_out = match stringify(ast) {
+    let strings_out = match stringify(ast) {
         Ok(t) => t,
         Err(e) => {
             println!("{:?}", e);
@@ -115,9 +119,9 @@ fn main() {
         }
     };
 
-    // println!("---------------------------------------------");
+    println!("---------------------------------------------");
 
-    // for i in 0..ssa_out.len() {
-    //     print!("{:0>2}) {}", i + 1, ssa_out[i]);
-    // }
+    for i in 0..strings_out.len() {
+        print!("{:0>2}) {}", i + 1, strings_out[i]);
+    }
 }

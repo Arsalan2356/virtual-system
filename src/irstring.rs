@@ -130,9 +130,8 @@ pub fn convert_to_string(expr: Expr, indent: usize) -> String {
         Expr::Array(_, n, m, el) => {
             let mut v = "".to_string();
             for i in 0..n {
-                v.push_str(&format!("{}", " ".repeat(indent)));
                 for j in 0..m {
-                    let s = match &el[i * n + j] {
+                    let s = match &el[i * m + j] {
                         Token::Float(x) => format!("{:.2}", x),
                         Token::Int(x) => format!("{}", x),
                         Token::String(x) => format!("{}", x),
@@ -144,6 +143,19 @@ pub fn convert_to_string(expr: Expr, indent: usize) -> String {
                 }
                 v += "\n";
             }
+            return v;
+        }
+        Expr::ArrayAccess(x, e1, e2) => {
+            let mut v = "".to_string();
+            v.push_str(&format!("{}", " ".repeat(indent)));
+            v.push_str(x.as_str());
+            v.push('[');
+            v.push_str(convert_to_string(*e1, 0).as_str());
+            v.push(']');
+            v.push('[');
+            v.push_str(convert_to_string(*e2, 0).as_str());
+            v.push(']');
+            v += "\n";
 
             return v;
         }
@@ -156,16 +168,16 @@ pub fn cond_to_string(cond: Cond, indent: usize) -> String {
             format!(
                 "{}%cond = eq {} {}\n",
                 " ".repeat(indent),
-                convert_to_string(*x, indent),
-                convert_to_string(*y, indent)
+                convert_to_string(*x, 0),
+                convert_to_string(*y, 0)
             )
         }
         Cond::Neq(x, y) => {
             format!(
                 "{}%cond = neq {} {}\n",
                 " ".repeat(indent),
-                convert_to_string(*x, indent),
-                convert_to_string(*y, indent)
+                convert_to_string(*x, 0),
+                convert_to_string(*y, 0)
             )
         }
         Cond::Geq(x, y) => {

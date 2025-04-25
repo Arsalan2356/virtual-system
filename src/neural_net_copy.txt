@@ -1,0 +1,118 @@
+x[17][10] = {
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+    0 0 0 0 0 0 0 0 0 1
+};
+
+l1weights[10][6] = {
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+    0 0 0 0 0 0
+};
+
+l2weights[6][4] = {
+    0 0 0 0
+    0 0 0 0
+    0 0 0 0
+    0 0 0 0
+    0 0 0 0
+    0 0 0 0
+};
+
+l3weights[4][1] = {
+    0
+    0
+    0
+    0
+};
+
+z1[1][6] = {
+    0 0 0 0 0 0
+};
+
+z2[1][4] = {
+    0 0 0 0 0 0
+};
+
+z3[1][1] = {
+    0
+};
+
+dz3[1][1] = {
+    0
+};
+
+
+maxiter = 1000;
+loop {
+    j = 0;
+    loop {
+        matmulindex(sample, l1weights, j, z1);
+        relu(z1);
+        arrayassign(z1, 0, 5, 1);
+
+
+        matmul(z1, l2weights, z2);
+        relu(z2);
+        arrayassign(z2, 0, 3, 1);
+
+        matmul(z2, l3weights, z3);
+        sigmoid(z3);
+
+
+        dz3 = matsubindex(z3, y, j, dz3);
+
+        outer(z2, dz3, dw3);
+        matmul(l3weights, dz3, dz2);
+        relz2 = z2;
+        reludrv(relz2);
+        dz2 = dz2 * relz2;
+        arrayassign(dz2, 0, 3, 0);
+
+        outer(z1, dz2, dw2);
+        matmul(l2weights, dz2, dz1);
+        relz1 = z1;
+        reludrv(relz1);
+        dz1 = dz1 * relz1;
+        arrayassign(dz1, 0, 5, 0);
+
+        outer(sample, dz1, dw1);
+
+        changeW3 = matmulconst(dw3, lr);
+        changeW2 = matmulconst(dw2, lr);
+        changeW1 = matmulconst(dw1, lr);
+
+        matsubinplace(W3, changeW3);
+        matsubinplace(W2, changeW2);
+        matsubinplace(W1, changeW1);
+
+        j = j + 1;
+        break (j == 699);
+    }
+
+
+
+    maxiter = maxiter - 1;
+    break (maxiter == 0);
+}
