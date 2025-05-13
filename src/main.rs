@@ -89,10 +89,42 @@ fn main() {
     let mut file = fs::File::create("src/compiled_code.txt").unwrap();
     let _ = file.write_all(s.as_bytes());
 
-    let cpustate = process(compiled_code);
+    let cpustate = process(&compiled_code, false, false, false, false, 1, 10, 1);
+    println!(
+        "Non-Optimized Instruction Count : {}",
+        cpustate.inst_executed
+    );
 
-    println!("Instruction Count : {}", cpustate.inst_executed);
-    println!("Labels : {:?}", cpustate.labels);
-    println!("Arrays : {:?}", cpustate.arrays);
-    println!("Variables : {:?}", cpustate.vars);
+    let cpustate = process(&compiled_code, true, false, false, false, 1, 10, 1);
+    println!("FMA Instruction Count : {}", cpustate.inst_executed);
+
+    let cpustate = process(&compiled_code, true, true, false, false, 1, 10, 1);
+    println!("FMA + FPU Instruction Count : {}", cpustate.inst_executed);
+
+    let cpustate = process(&compiled_code, true, true, true, false, 1, 10, 1);
+    println!(
+        "FMA + FPU + Branch Instruction Count : {}",
+        cpustate.inst_executed
+    );
+
+    let cpustate = process(&compiled_code, true, true, true, true, 1, 10, 1);
+    println!(
+        "FMA + FPU + Branch + Inline Instruction Count : {}",
+        cpustate.inst_executed
+    );
+
+    let cpustate = process(&compiled_code, true, true, true, true, 8, 10, 1);
+    println!(
+        "Loop Unrolling Instruction Count : {}",
+        cpustate.inst_executed
+    );
+
+    let cpustate = process(&compiled_code, true, true, true, true, 8, 1, 1);
+    println!(
+        "Only L1 Cache Instruction Count : {}",
+        cpustate.inst_executed
+    );
+
+    let cpustate = process(&compiled_code, true, true, true, true, 8, 1, 8);
+    println!("Vectorized Instruction Count : {}", cpustate.inst_executed);
 }

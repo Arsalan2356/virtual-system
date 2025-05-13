@@ -145,7 +145,16 @@ impl MulAssign for Prim {
     }
 }
 
-pub fn process(asm: Vec<ASM>) -> CPUState {
+pub fn process(
+    asm: &Vec<ASM>,
+    enable_fma: bool,
+    enable_perfect_fpu: bool,
+    enable_perfect_branch: bool,
+    enable_function_inline: bool,
+    loop_unrolling: i64,
+    access_times: i64,
+    vectorized_arrays: i64,
+) -> CPUState {
     let mut inst_count = 0;
     let mut labels = vec![];
     let mut vars: Vec<(String, usize)> = vec![];
@@ -258,6 +267,8 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                 } else {
                     vars_vals.insert(p2, vars_vals[&p1].clone());
                 }
+
+                inst_count += access_times;
             }
             ASM::SETI(s, i) => {
                 let found = vars.iter().any(|x| x.0 == *s);
@@ -277,6 +288,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                         vars_vals.insert(s.clone(), Prim::Int(*i));
                     }
                 }
+                inst_count += access_times;
             }
             ASM::SETB(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -296,6 +308,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                         vars_vals.insert(s1.clone(), Prim::Bool(*s2));
                     }
                 }
+                inst_count += access_times;
             }
             ASM::SETS(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -315,6 +328,8 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                         vars_vals.insert(s1.clone(), Prim::Str(s2.clone()));
                     }
                 }
+
+                inst_count += access_times;
             }
             ASM::SETF(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -335,6 +350,8 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                         vars_vals.insert(s1.clone(), Prim::Float(*s2));
                     }
                 }
+
+                inst_count += access_times;
             }
             ASM::CALL(f, args) => {
                 let fname = f[2..f.len() - 1].to_string();
@@ -345,7 +362,15 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     &mut arr_vals,
                     &arrays,
                     &mut inst_count,
+                    enable_fma,
+                    enable_perfect_fpu,
+                    loop_unrolling,
+                    vectorized_arrays,
                 );
+
+                if !enable_function_inline {
+                    inst_count += 1;
+                }
             }
             ASM::ADD(s1, s2) => {
                 let p = if s1.len() > 2 {
@@ -389,11 +414,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     vars_vals[&p].clone()
                 };
 
-                let out = match (val1, val2) {
-                    (Prim::Int(x), Prim::Int(y)) => Prim::Int(x + y),
-                    (Prim::Float(x), Prim::Float(y)) => Prim::Float(x + y),
-                    _ => Prim::Int(0),
-                };
+                let out = val1.clone() + val2.clone();
 
                 if !found {
                     let x = s2
@@ -408,6 +429,12 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+
+                let time = if enable_perfect_fpu { 1 } else { 7 };
+                match (val1, val2) {
+                    (Prim::Float(_), _) | (_, Prim::Float(_)) => inst_count += time,
+                    _ => inst_count += 1,
+                };
             }
             ASM::SUB(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -452,11 +479,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     vars_vals[&p].clone()
                 };
 
-                let out = match (val1, val2) {
-                    (Prim::Int(x), Prim::Int(y)) => Prim::Int(y - x),
-                    (Prim::Float(x), Prim::Float(y)) => Prim::Float(y - x),
-                    _ => Prim::Int(0),
-                };
+                let out = val2.clone() - val1.clone();
 
                 if !found {
                     let x = s2
@@ -471,6 +494,11 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+                let time = if enable_perfect_fpu { 1 } else { 7 };
+                match (val1, val2) {
+                    (Prim::Float(_), _) | (_, Prim::Float(_)) => inst_count += time,
+                    _ => inst_count += 1,
+                };
             }
             ASM::MUL(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -502,11 +530,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     vars_vals[&p].clone()
                 };
 
-                let out = match (val1, val2) {
-                    (Prim::Int(x), Prim::Int(y)) => Prim::Int(x * y),
-                    (Prim::Float(x), Prim::Float(y)) => Prim::Float(x * y),
-                    _ => Prim::Int(0),
-                };
+                let out = val1.clone() * val2.clone();
 
                 if !found {
                     let x = s2
@@ -521,6 +545,12 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+
+                let time = if enable_perfect_fpu { 3 } else { 7 };
+                match (val1, val2) {
+                    (Prim::Float(_), _) | (_, Prim::Float(_)) => inst_count += time,
+                    _ => inst_count += 1,
+                };
             }
             ASM::DIV(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -552,9 +582,11 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     vars_vals[&p].clone()
                 };
 
-                let out = match (val1, val2) {
+                let out = match (val1.clone(), val2.clone()) {
                     (Prim::Int(x), Prim::Int(y)) => Prim::Float(x as f64 / y as f64),
                     (Prim::Float(x), Prim::Float(y)) => Prim::Float(x / y),
+                    (Prim::Int(x), Prim::Float(y)) => Prim::Float(x as f64 / y),
+                    (Prim::Float(x), Prim::Int(y)) => Prim::Float(x / y as f64),
                     _ => Prim::Int(0),
                 };
 
@@ -571,6 +603,11 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+                let time = if enable_perfect_fpu { 4 } else { 15 };
+                match (val1, val2) {
+                    (Prim::Float(_), _) | (_, Prim::Float(_)) => inst_count += time,
+                    _ => inst_count += 4,
+                };
             }
             ASM::DIVI(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -602,7 +639,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     vars_vals[&p].clone()
                 };
 
-                let out = match (val1, val2) {
+                let out = match (val1.clone(), val2.clone()) {
                     (Prim::Int(x), Prim::Int(y)) => Prim::Int(x / y),
                     (Prim::Float(x), Prim::Float(y)) => Prim::Int((x / y) as i64),
                     _ => Prim::Int(0),
@@ -621,6 +658,12 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+
+                let time = if enable_perfect_fpu { 4 } else { 15 };
+                match (val1, val2) {
+                    (Prim::Float(_), _) | (_, Prim::Float(_)) => inst_count += time,
+                    _ => inst_count += 1,
+                };
             }
             ASM::AND(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -652,9 +695,11 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     vars_vals[&p].clone()
                 };
 
-                let out = match (val1, val2) {
+                let out = match (val1.clone(), val2.clone()) {
                     (Prim::Int(x), Prim::Int(y)) => Prim::Int(x & y),
                     (Prim::Float(x), Prim::Float(y)) => Prim::Int(x as i64 & y as i64),
+                    (Prim::Int(x), Prim::Float(y)) => Prim::Int(x / y as i64),
+                    (Prim::Float(x), Prim::Int(y)) => Prim::Int(x as i64 / y),
                     _ => Prim::Int(0),
                 };
 
@@ -671,6 +716,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+                inst_count += 1;
             }
             ASM::OR(s1, s2) => {
                 let found = vars.iter().any(|x| x.0 == *s1);
@@ -721,6 +767,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+                inst_count += 1;
             }
 
             ASM::XOR(s1, s2) => {
@@ -772,6 +819,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+                inst_count += 1;
             }
 
             ASM::SETEQ(s1, s2) => {
@@ -822,6 +870,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                 if test {
                     rout = 1;
                 }
+                inst_count += 1;
             }
 
             ASM::SETNEQ(s1, s2) => {
@@ -864,6 +913,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                 if !test {
                     rout = 1;
                 }
+                inst_count += 1;
             }
 
             ASM::SETG(s1, s2) => {
@@ -906,6 +956,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                 if test {
                     rout = 1;
                 }
+                inst_count += 1;
             }
 
             ASM::SETGE(s1, s2) => {
@@ -948,6 +999,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                 if test {
                     rout = 1;
                 }
+                inst_count += 1;
             }
 
             ASM::J(s) => {
@@ -957,6 +1009,9 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                         break;
                     }
                 }
+
+                let time = if enable_perfect_branch { 1 } else { 3 };
+                inst_count += time;
             }
 
             ASM::JEQ(s1, s2, s3) => {
@@ -1005,6 +1060,8 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                         }
                     }
                 }
+                let time = if enable_perfect_branch { 1 } else { 3 };
+                inst_count += time;
             }
 
             ASM::JNEQ(s1, s2, s3) => {
@@ -1065,6 +1122,8 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                         }
                     }
                 }
+                let time = if enable_perfect_branch { 1 } else { 3 };
+                inst_count += time;
             }
 
             ASM::MAX(s1, s2) => {
@@ -1118,6 +1177,7 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     let p = s2[2..s2.len() - 1].to_string();
                     vars_vals.insert(p.clone(), out);
                 }
+                inst_count += 1;
             }
 
             ASM::LABEL(_) => {}
@@ -1133,19 +1193,24 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                         break;
                     }
                 }
+                inst_count += 1;
             }
 
             ASM::PRIMI(x) => {
                 arr_vals.get_mut(&rout).unwrap().push(Prim::Int(*x));
+                inst_count += 1;
             }
             ASM::PRIMB(x) => {
                 arr_vals.get_mut(&rout).unwrap().push(Prim::Bool(*x));
+                inst_count += 1;
             }
             ASM::PRIMF(x) => {
                 arr_vals.get_mut(&rout).unwrap().push(Prim::Float(*x));
+                inst_count += 1;
             }
             ASM::PRIMS(x) => {
                 arr_vals.get_mut(&rout).unwrap().push(Prim::Str(x.clone()));
+                inst_count += 1;
             }
 
             ASM::ENDDEF => {}
@@ -1167,13 +1232,13 @@ pub fn process(asm: Vec<ASM>) -> CPUState {
                     }
                     _ => {}
                 }
+                inst_count += access_times;
             }
 
             ASM::END => {}
         }
 
         index += 1;
-        inst_count += 1;
     }
 
     let finalstate = CPUState {
@@ -1196,6 +1261,10 @@ pub fn runfunc(
     arr_vals: &mut HashMap<i64, Vec<Prim>>,
     arrays: &Vec<(String, usize, usize, usize)>,
     inst_count: &mut i64,
+    enable_fma: bool,
+    enable_perfect_fpu: bool,
+    loop_unrolling: i64,
+    vectorized_arrays: i64,
 ) {
     match f.as_str() {
         "matmulindex" => {
@@ -1235,17 +1304,24 @@ pub fn runfunc(
                 }
             }
             let start_index = sample_dim2 * index;
+            let cost = if enable_fma { 1 } else { 2 };
+            let mut loop_cost = 0;
             for j in 0..out.len() {
                 let mut s = sample_arr[start_index].clone() * weights[0].clone();
                 for q in 1..sample_dim2 {
                     let s_ind = j * weights_dim1;
                     let v = sample_arr[start_index + q].clone() * weights[s_ind + q].clone();
                     s += v;
-                    *inst_count += 2;
+                    loop_cost += cost;
                 }
                 out[j] = s;
-                *inst_count += 1;
+                loop_cost += 1;
             }
+
+            loop_cost /= loop_unrolling;
+            loop_cost /= vectorized_arrays;
+
+            *inst_count += loop_cost;
         }
         "relu" => {
             let weights = match vars_vals[args[0].as_str()].clone() {
@@ -1325,17 +1401,24 @@ pub fn runfunc(
                 _ => &mut vec![],
             };
 
+            let mut loop_cost = 0;
+            let cost = if enable_fma { 1 } else { 2 };
             for x in 0..a_dim1 {
                 for y in 0..b_dim2 {
                     let mut s = a[x * a_dim2].clone() + b[y].clone();
                     for k in 1..a_dim2 {
                         s += a[x * a_dim2 + k].clone() * b[k * b_dim2 + y].clone();
-                        *inst_count += 2;
+                        loop_cost += cost;
                     }
                     out[x * b_dim2 + y] = s;
-                    *inst_count += 1;
+                    loop_cost += 1;
                 }
             }
+
+            loop_cost /= loop_unrolling;
+            loop_cost /= vectorized_arrays;
+
+            *inst_count += loop_cost;
         }
         "sigmoid" => {
             // Only called on z3
@@ -1351,7 +1434,8 @@ pub fn runfunc(
                 Prim::Float(x) => Prim::Float(1.0 / 1.0 + (-x).exp()),
                 _ => Prim::Float(0.5),
             };
-            *inst_count += 2;
+            let cost = if enable_perfect_fpu { 3 } else { 7 };
+            *inst_count += 2 * cost;
         }
         "matsubindex" => {
             let arr = match vars_vals[args[0].as_str()].clone() {
@@ -1400,18 +1484,34 @@ pub fn runfunc(
                 _ => &mut vec![],
             };
 
+            let mut loop_cost = 0;
             for x in 0..out_dim1 {
                 for y in 0..out_dim2 {
                     out[x * out_dim2 + y] = a[x].clone() + b[y].clone();
-                    *inst_count += 1;
+
+                    let v = match (a[x].clone(), b[y].clone()) {
+                        (Prim::Float(_), _) | (_, Prim::Float(_)) => {
+                            if enable_perfect_fpu {
+                                1
+                            } else {
+                                7
+                            }
+                        }
+                        _ => 1,
+                    };
+                    loop_cost += v;
                 }
             }
+            loop_cost /= loop_unrolling;
+            loop_cost /= vectorized_arrays;
+            *inst_count += loop_cost;
         }
         "reludrv" => {
             let m = match vars_vals[args[0].as_str()].clone() {
                 Prim::Int(x) => arr_vals.get_mut(&x).unwrap(),
                 _ => &mut vec![],
             };
+            let mut loop_cost = 0;
             for i in 0..m.len() {
                 m[i] = match &m[i] {
                     Prim::Int(x) => {
@@ -1437,8 +1537,11 @@ pub fn runfunc(
                     }
                     _ => Prim::Int(1),
                 };
-                *inst_count += 1;
+                loop_cost += 1;
             }
+            loop_cost /= loop_unrolling;
+            loop_cost /= vectorized_arrays;
+            *inst_count += loop_cost;
         }
         "elemmult" => {
             let b = match vars_vals[args[0].as_str()].clone() {
@@ -1449,10 +1552,15 @@ pub fn runfunc(
                 Prim::Int(x) => arr_vals.get_mut(&x).unwrap(),
                 _ => &mut vec![],
             };
+            let mut loop_cost = 0;
             for x in 0..b.len() {
                 a[x] *= b[x].clone();
-                *inst_count += 1;
+                let cost = if enable_perfect_fpu { 3 } else { 7 };
+                loop_cost += cost;
             }
+            loop_cost /= loop_unrolling;
+            loop_cost /= vectorized_arrays;
+            *inst_count += loop_cost;
         }
         "matmulconst" => {
             let b = vars_vals[args[1].as_str()].clone();
@@ -1461,10 +1569,25 @@ pub fn runfunc(
                 _ => &mut vec![],
             };
 
+            let mut loop_cost = 0;
             for x in 0..a.len() {
                 a[x] *= b.clone();
-                *inst_count += 1;
+
+                let cost = match (a[x].clone(), b.clone()) {
+                    (Prim::Float(_), _) | (_, Prim::Float(_)) => {
+                        if enable_perfect_fpu {
+                            3
+                        } else {
+                            7
+                        }
+                    }
+                    _ => 3,
+                };
+                loop_cost += cost;
             }
+            loop_cost /= loop_unrolling;
+            loop_cost /= vectorized_arrays;
+            *inst_count += loop_cost;
         }
         "matsubinplace" => {
             let b = match vars_vals[args[0].as_str()].clone() {
@@ -1476,10 +1599,25 @@ pub fn runfunc(
                 _ => &mut vec![],
             };
 
+            let mut loop_cost = 0;
             for x in 0..a.len() {
                 a[x] -= b[x].clone();
-                *inst_count += 1;
+                let cost = match (a[x].clone(), b[x].clone()) {
+                    (Prim::Float(_), _) | (_, Prim::Float(_)) => {
+                        if enable_perfect_fpu {
+                            1
+                        } else {
+                            7
+                        }
+                    }
+                    _ => 1,
+                };
+                loop_cost += cost;
             }
+
+            loop_cost /= loop_unrolling;
+            loop_cost /= vectorized_arrays;
+            *inst_count += loop_cost;
         }
 
         _ => {
