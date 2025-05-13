@@ -10,7 +10,7 @@ pub enum Expr {
     IfElse(Cond, Vec<Expr>, Vec<Expr>),
     // fun id(arg0(,?) arg1(,?) ...) { Exprs }
     Fun(String, Vec<String>, Vec<Expr>),
-    // loop { Exprs + Break + Exprs? }
+    // loop { Exprs + Break }
     Loop(Vec<Expr>, Break),
     // Expr1 Binop Expr2
     BinOp(String, Box<Expr>, Box<Expr>),
@@ -201,7 +201,7 @@ pub fn create_expr(tokens: Vec<Token>) -> Result<Vec<Vec<Token>>, &'static str> 
     }
 
     if exprs.len() == 0 && tokens.len() != 0 {
-        println!("Tokens : {:?}", tokens);
+        // println!("Tokens : {:?}", tokens);
         return Err("No Expressions in Tokens");
     }
 
@@ -213,7 +213,7 @@ pub fn lookahead(l: &Vec<Token>, n: usize) -> Token {
 }
 
 pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
-    println!("Parsing {:?}", tokens_for_expr);
+    // println!("Parsing {:?}", tokens_for_expr);
     // Check first token to see what we have
     match lookahead(&tokens_for_expr, 0) {
         // If first token is var,
@@ -278,6 +278,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                     for i in 2..tokens_for_expr.len() {
                         match &tokens_for_expr[i] {
                             Token::Var(x) => ids.push(x.clone()),
+                            Token::Int(x) => ids.push(x.to_string()),
                             _ => {}
                         }
                     }
@@ -291,7 +292,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
                         _ => false,
                     });
                     match toks {
-                        Some(x) => create_vec(tokens_for_expr),
+                        Some(_) => create_vec(tokens_for_expr),
                         None => {
                             // Array access
                             let v_name = match lookahead(&tokens_for_expr, 0) {
@@ -669,7 +670,7 @@ pub fn create_ast(tokens_for_expr: Vec<Token>) -> Result<Expr, &'static str> {
 }
 
 pub fn parse_cond(v: &[Token]) -> Result<Cond, &'static str> {
-    println!("PARSING COND ON {:?}", v);
+    // println!("PARSING COND ON {:?}", v);
     // Look for boolean operators to split into multiple conds
     let bool_search = v.iter().position(|x| match x {
         Token::Or
@@ -859,13 +860,13 @@ pub fn parse_cond(v: &[Token]) -> Result<Cond, &'static str> {
 }
 
 pub fn create_vec(tokens: Vec<Token>) -> Result<Expr, &'static str> {
-    println!("CREATING VEC : {:?}", tokens);
+    // println!("CREATING VEC : {:?}", tokens);
     // Special case with an assign
     let vec_name = match lookahead(&tokens, 0) {
         Token::Var(x) => x,
         _ => return Err("Expected variable name before vector assignment"),
     };
-    println!("VEC NAME : {}", vec_name);
+    // println!("VEC NAME : {}", vec_name);
 
     let mut dims = vec![];
     let mut index = 1;

@@ -139,6 +139,7 @@ pub fn handle_if(cond: Cond, e: Vec<Expr>, vars: &mut HashSet<Variable>) -> Vec<
     return new_exprs;
 }
 
+// not working yet
 pub fn handle_if_else(
     cond: Cond,
     true_e: Vec<Expr>,

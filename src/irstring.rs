@@ -3,11 +3,11 @@ use crate::parser::Break;
 use crate::parser::Cond;
 use crate::parser::Expr;
 
-pub fn stringify(exprs: Vec<Expr>) -> Result<Vec<String>, &'static str> {
+pub fn stringify(exprs: &Vec<Expr>) -> Result<Vec<String>, &'static str> {
     // Expr -> String
     let mut expr_strings = vec![];
     for e in exprs {
-        expr_strings.push(convert_to_string(e, 0));
+        expr_strings.push(convert_to_string(e.clone(), 0));
     }
     return Ok(expr_strings);
 }
@@ -130,6 +130,7 @@ pub fn convert_to_string(expr: Expr, indent: usize) -> String {
         Expr::Array(_, n, m, el) => {
             let mut v = "".to_string();
             for i in 0..n {
+                v += &" ".repeat(indent);
                 for j in 0..m {
                     let s = match &el[i * m + j] {
                         Token::Float(x) => format!("{:.2}", x),

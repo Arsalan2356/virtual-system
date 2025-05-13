@@ -266,7 +266,6 @@ pub fn tokenize(str: String) -> Result<Vec<Token>, String> {
             s = &s[m.end()..];
             tokens.push(Token::Assign);
         } else {
-            println!("Current string : {}", s);
             return Err("Unable to tokenize string".to_string());
         }
     }
