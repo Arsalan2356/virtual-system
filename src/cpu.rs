@@ -151,7 +151,6 @@ pub fn process(
     enable_perfect_fpu: bool,
     enable_perfect_branch: bool,
     enable_function_inline: bool,
-    loop_unrolling: i64,
     access_times: i64,
     vectorized_arrays: i64,
 ) -> CPUState {
@@ -364,7 +363,6 @@ pub fn process(
                     &mut inst_count,
                     enable_fma,
                     enable_perfect_fpu,
-                    loop_unrolling,
                     vectorized_arrays,
                 );
 
@@ -1263,7 +1261,6 @@ pub fn runfunc(
     inst_count: &mut i64,
     enable_fma: bool,
     enable_perfect_fpu: bool,
-    loop_unrolling: i64,
     vectorized_arrays: i64,
 ) {
     match f.as_str() {
@@ -1318,7 +1315,6 @@ pub fn runfunc(
                 loop_cost += 1;
             }
 
-            loop_cost /= loop_unrolling;
             loop_cost /= vectorized_arrays;
 
             *inst_count += loop_cost;
@@ -1415,7 +1411,6 @@ pub fn runfunc(
                 }
             }
 
-            loop_cost /= loop_unrolling;
             loop_cost /= vectorized_arrays;
 
             *inst_count += loop_cost;
@@ -1502,7 +1497,6 @@ pub fn runfunc(
                     loop_cost += v;
                 }
             }
-            loop_cost /= loop_unrolling;
             loop_cost /= vectorized_arrays;
             *inst_count += loop_cost;
         }
@@ -1539,7 +1533,6 @@ pub fn runfunc(
                 };
                 loop_cost += 1;
             }
-            loop_cost /= loop_unrolling;
             loop_cost /= vectorized_arrays;
             *inst_count += loop_cost;
         }
@@ -1548,7 +1541,7 @@ pub fn runfunc(
                 Prim::Int(x) => arr_vals[&x].clone(),
                 _ => vec![],
             };
-            let a = match vars_vals[args[0].as_str()].clone() {
+            let a = match vars_vals[args[1].as_str()].clone() {
                 Prim::Int(x) => arr_vals.get_mut(&x).unwrap(),
                 _ => &mut vec![],
             };
@@ -1558,7 +1551,6 @@ pub fn runfunc(
                 let cost = if enable_perfect_fpu { 3 } else { 7 };
                 loop_cost += cost;
             }
-            loop_cost /= loop_unrolling;
             loop_cost /= vectorized_arrays;
             *inst_count += loop_cost;
         }
@@ -1585,7 +1577,6 @@ pub fn runfunc(
                 };
                 loop_cost += cost;
             }
-            loop_cost /= loop_unrolling;
             loop_cost /= vectorized_arrays;
             *inst_count += loop_cost;
         }
@@ -1594,7 +1585,7 @@ pub fn runfunc(
                 Prim::Int(x) => arr_vals[&x].clone(),
                 _ => vec![],
             };
-            let a = match vars_vals[args[0].as_str()].clone() {
+            let a = match vars_vals[args[1].as_str()].clone() {
                 Prim::Int(x) => arr_vals.get_mut(&x).unwrap(),
                 _ => &mut vec![],
             };
@@ -1615,7 +1606,6 @@ pub fn runfunc(
                 loop_cost += cost;
             }
 
-            loop_cost /= loop_unrolling;
             loop_cost /= vectorized_arrays;
             *inst_count += loop_cost;
         }

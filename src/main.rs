@@ -1,6 +1,5 @@
 use std::{
-    collections::HashSet,
-    fs::{self, File},
+    fs::{self},
     io::Write,
 };
 
@@ -24,8 +23,8 @@ pub mod parser;
 pub mod ssa;
 
 fn main() {
-    let s = fs::read_to_string("src/neural_net_copy.txt")
-        .expect("Expected a text file called neural_net");
+    let s =
+        fs::read_to_string("src/neural_net.txt").expect("Expected a text file called neural_net");
 
     let tokens = match tokenize(s.to_string().replace("\n", "").trim_ascii().to_string()) {
         Ok(t) => t,
@@ -89,42 +88,37 @@ fn main() {
     let mut file = fs::File::create("src/compiled_code.txt").unwrap();
     let _ = file.write_all(s.as_bytes());
 
-    let cpustate = process(&compiled_code, false, false, false, false, 1, 10, 1);
+    let cpustate = process(&compiled_code, false, false, false, false, 10, 1);
     println!(
         "Non-Optimized Instruction Count : {}",
         cpustate.inst_executed
     );
 
-    let cpustate = process(&compiled_code, true, false, false, false, 1, 10, 1);
+    let cpustate = process(&compiled_code, true, false, false, false, 10, 1);
     println!("FMA Instruction Count : {}", cpustate.inst_executed);
 
-    let cpustate = process(&compiled_code, true, true, false, false, 1, 10, 1);
+    let cpustate = process(&compiled_code, true, true, false, false, 10, 1);
     println!("FMA + FPU Instruction Count : {}", cpustate.inst_executed);
 
-    let cpustate = process(&compiled_code, true, true, true, false, 1, 10, 1);
+    let cpustate = process(&compiled_code, true, true, true, false, 10, 1);
     println!(
         "FMA + FPU + Branch Instruction Count : {}",
         cpustate.inst_executed
     );
 
-    let cpustate = process(&compiled_code, true, true, true, true, 1, 10, 1);
+    let cpustate = process(&compiled_code, true, true, true, true, 10, 1);
     println!(
         "FMA + FPU + Branch + Inline Instruction Count : {}",
         cpustate.inst_executed
     );
 
-    let cpustate = process(&compiled_code, true, true, true, true, 8, 10, 1);
-    println!(
-        "Loop Unrolling Instruction Count : {}",
-        cpustate.inst_executed
-    );
-
-    let cpustate = process(&compiled_code, true, true, true, true, 8, 1, 1);
+    let cpustate = process(&compiled_code, true, true, true, true, 1, 1);
     println!(
         "Only L1 Cache Instruction Count : {}",
         cpustate.inst_executed
     );
 
-    let cpustate = process(&compiled_code, true, true, true, true, 8, 1, 8);
+    let cpustate = process(&compiled_code, true, true, true, true, 1, 8);
     println!("Vectorized Instruction Count : {}", cpustate.inst_executed);
+    // println!("Array Values : {:?}", cpustate.arr_vals);
 }
